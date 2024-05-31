@@ -1,8 +1,6 @@
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-
-app = Flask(__name__)
-CORS(app)
+import webapp2
+import json
+from webob import Response
 
 tasks = [
     {"id": 1, "title": "Task 1", "completed": False},
@@ -10,24 +8,61 @@ tasks = [
 ]
 
 
-@app.route("/tasks", methods=["GET"])
-def get_tasks():
-    return jsonify(tasks)
+def add_cors_headers(response):
+    response.headers.add_header("Access-Control-Allow-Origin", "*")
+    response.headers.add_header(
+        "Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS"
+    )
+    response.headers.add_header("Access-Control-Allow-Headers", "Content-Type")
+    return response
 
 
-@app.route("/tasks", methods=["POST"])
-def add_task():
-    new_task = request.get_json()
-    tasks.append(new_task)
-    return jsonify(new_task), 201
+class TasksHandler(webapp2.RequestHandler):
+    def options(self):
+        self.response = add_cors_headers(self.response)
+        self.response.set_status(204)
+
+    def get(self):
+        self.response = add_cors_headers(self.response)
+        self.response.content_type = "application/json"
+        self.response.write(json.dumps(tasks))
+
+    def post(self):
+        self.response = add_cors_headers(self.response)
+        new_task = json.loads(self.request.body)
+        tasks.append(new_task)
+        self.response.set_status(201)
+        self.response.content_type = "application/json"
+        self.response.write(json.dumps(new_task))
 
 
-@app.route("/tasks/<int:task_id>", methods=["DELETE"])
-def delete_task(task_id):
-    global tasks
-    tasks = [task for task in tasks if task["id"] != task_id]
-    return "", 204
+class TaskHandler(webapp2.RequestHandler):
+    def options(self, task_id):
+        self.response = add_cors_headers(self.response)
+        self.response.set_status(204)
+
+    def delete(self, task_id):
+        self.response = add_cors_headers(self.response)
+        global tasks
+        task_id = int(task_id)
+        tasks = [task for task in tasks if task["id"] != task_id]
+        self.response.set_status(204)
+
+
+app = webapp2.WSGIApplication(
+    [
+        ("/tasks", TasksHandler),
+        ("/tasks/(\d+)", TaskHandler),
+    ],
+    debug=True,
+)
+
+
+def main():
+    from paste import httpserver
+
+    httpserver.serve(app, host="127.0.0.1", port="5000")
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    main()
